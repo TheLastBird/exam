@@ -18,38 +18,8 @@ const DEFAULT_USERS = [
   { id: "u_student", username: "student", password: "123456", nickname: "学生用户", role: "student" },
 ];
 
-const DEFAULT_QUESTIONS = [
-  {
-    id: "q_single_demo",
-    type: "single",
-    content: "HTML 中用于插入 JavaScript 脚本的标签是？",
-    options: ["<script>", "<style>", "<link>", "<meta>"],
-    answer: ["A"],
-    analysis: "<script> 标签用于在 HTML 页面中嵌入或引用 JavaScript。",
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: "q_multiple_demo",
-    type: "multiple",
-    content: "以下属于前端基础技术的是？",
-    options: ["HTML", "CSS", "JavaScript", "MySQL"],
-    answer: ["A", "B", "C"],
-    analysis: "HTML、CSS、JavaScript 是 Web 前端三大基础技术。",
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: "q_judge_demo",
-    type: "judge",
-    content: "HTTP 是一种无状态协议。",
-    options: [],
-    answer: ["正确"],
-    analysis: "HTTP 协议本身不保存请求之间的状态。",
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-];
+const DEFAULT_QUESTIONS = [];
+const REMOVED_DEMO_QUESTION_IDS = new Set(["q_single_demo", "q_multiple_demo", "q_judge_demo"]);
 
 const appState = {
   view: "practice",
@@ -113,7 +83,14 @@ function getCurrentUser() {
 
 function getQuestions() {
   const questions = loadJSON(STORAGE_KEYS.questions, null);
-  if (questions) return questions;
+  if (questions) {
+    const migratedQuestions = questions.filter((question) => !REMOVED_DEMO_QUESTION_IDS.has(question.id));
+    if (migratedQuestions.length !== questions.length) {
+      saveJSON(STORAGE_KEYS.questions, migratedQuestions);
+      saveWrongBook(getWrongBook().filter((item) => !REMOVED_DEMO_QUESTION_IDS.has(item.questionId)));
+    }
+    return migratedQuestions;
+  }
   saveJSON(STORAGE_KEYS.questions, DEFAULT_QUESTIONS);
   return DEFAULT_QUESTIONS;
 }
