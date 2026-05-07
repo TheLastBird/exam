@@ -657,9 +657,19 @@ function renderPracticeProgress(stats) {
   const percent = Math.round((stats.correctCount / stats.total) * 100);
   return `
     <article class="practice-progress">
-      <div>
-        <strong>第 ${stats.round} 轮刷题进度</strong>
-        <p>已答对 ${stats.correctCount} / ${stats.total} 题，剩余 ${stats.remainingCount} 题。</p>
+      <div class="practice-progress-stats">
+        <div>
+          <span>刷题轮次</span>
+          <strong>第 ${stats.round} 轮</strong>
+        </div>
+        <div>
+          <span>本轮答对数量</span>
+          <strong>${stats.correctCount} 题</strong>
+        </div>
+        <div>
+          <span>本轮待刷题数</span>
+          <strong>${stats.remainingCount} 题</strong>
+        </div>
       </div>
       <div class="progress-meter" aria-label="随机刷题进度">
         <span style="width: ${percent}%"></span>

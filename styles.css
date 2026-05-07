@@ -340,7 +340,7 @@ label {
 
 .practice-progress {
   display: grid;
-  grid-template-columns: minmax(180px, auto) minmax(160px, 1fr) auto;
+  grid-template-columns: minmax(320px, 1fr) minmax(160px, 1fr) auto;
   gap: 16px;
   align-items: center;
   padding: 18px;
@@ -350,9 +350,28 @@ label {
   box-shadow: var(--shadow);
 }
 
-.practice-progress p {
-  margin: 6px 0 0;
+.practice-progress-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.practice-progress-stats div {
+  padding: 12px;
+  border-radius: 14px;
+  background: #f7f9ff;
+}
+
+.practice-progress-stats span {
+  display: block;
   color: var(--muted);
+  font-size: 13px;
+}
+
+.practice-progress-stats strong {
+  display: block;
+  margin-top: 6px;
+  font-size: 20px;
 }
 
 .progress-meter {
@@ -567,6 +586,7 @@ th {
   .two-columns,
   .form-grid,
   .practice-progress,
+  .practice-progress-stats,
   .result-summary {
     grid-template-columns: 1fr;
   }
