@@ -5,6 +5,7 @@ const STORAGE_KEYS = {
   wrongBook: "exam.wrongBook",
   answerRecords: "exam.answerRecords",
   tests: "exam.tests",
+  practiceProgress: "exam.practiceProgress",
 };
 
 const QUESTION_TYPES = {
@@ -121,6 +122,108 @@ function getTests() {
 
 function saveTests(tests) {
   saveJSON(STORAGE_KEYS.tests, tests);
+}
+
+function getPracticeProgress() {
+  return loadJSON(STORAGE_KEYS.practiceProgress, []);
+}
+
+function savePracticeProgress(items) {
+  saveJSON(STORAGE_KEYS.practiceProgress, items);
+}
+
+function getUserPracticeProgress(userId, questions = getQuestions()) {
+  const progressItems = getPracticeProgress();
+  const existing = progressItems.find((item) => item.userId === userId);
+  const validQuestionIds = new Set(questions.map((question) => question.id));
+  const correctQuestionIds = (existing?.correctQuestionIds ?? []).filter((questionId) => validQuestionIds.has(questionId));
+
+  if (existing && correctQuestionIds.length !== existing.correctQuestionIds.length) {
+    savePracticeProgress(
+      progressItems.map((item) =>
+        item.userId === userId
+          ? {
+              ...item,
+              correctQuestionIds,
+              updatedAt: nowISO(),
+            }
+          : item,
+      ),
+    );
+  }
+
+  return {
+    userId,
+    round: existing?.round ?? 1,
+    correctQuestionIds,
+  };
+}
+
+function getPracticeStats(user, questions = getQuestions()) {
+  const progress = getUserPracticeProgress(user.id, questions);
+  const correctQuestionIdSet = new Set(progress.correctQuestionIds);
+  const remainingQuestions = questions.filter((question) => !correctQuestionIdSet.has(question.id));
+
+  return {
+    total: questions.length,
+    round: progress.round,
+    correctCount: progress.correctQuestionIds.length,
+    remainingCount: remainingQuestions.length,
+    completed: questions.length > 0 && remainingQuestions.length === 0,
+    remainingQuestions,
+  };
+}
+
+function markPracticeQuestionCorrect(userId, questionId) {
+  const progressItems = getPracticeProgress();
+  const existingIndex = progressItems.findIndex((item) => item.userId === userId);
+  const updatedAt = nowISO();
+
+  if (existingIndex >= 0) {
+    const existing = progressItems[existingIndex];
+    const correctQuestionIds = Array.from(new Set([...(existing.correctQuestionIds ?? []), questionId]));
+    progressItems[existingIndex] = {
+      ...existing,
+      correctQuestionIds,
+      updatedAt,
+    };
+  } else {
+    progressItems.push({
+      userId,
+      round: 1,
+      correctQuestionIds: [questionId],
+      createdAt: updatedAt,
+      updatedAt,
+    });
+  }
+
+  savePracticeProgress(progressItems);
+}
+
+function resetPracticeProgress(userId) {
+  const progressItems = getPracticeProgress();
+  const existingIndex = progressItems.findIndex((item) => item.userId === userId);
+  const updatedAt = nowISO();
+
+  if (existingIndex >= 0) {
+    const existing = progressItems[existingIndex];
+    progressItems[existingIndex] = {
+      ...existing,
+      round: (existing.round ?? 1) + 1,
+      correctQuestionIds: [],
+      updatedAt,
+    };
+  } else {
+    progressItems.push({
+      userId,
+      round: 1,
+      correctQuestionIds: [],
+      createdAt: updatedAt,
+      updatedAt,
+    });
+  }
+
+  savePracticeProgress(progressItems);
 }
 
 function normalizeType(value) {
@@ -527,31 +630,62 @@ function renderChoicePreview(question) {
 
 function renderPracticeView(user) {
   const questions = getQuestions();
+  const stats = getPracticeStats(user, questions);
   const question = appState.activePracticeQuestionId ? getQuestionById(appState.activePracticeQuestionId) : null;
   return `
     <section class="page-section">
       <div class="section-title">
         <div>
           <h1>随机刷题</h1>
-          <p>从题库随机抽题，提交后立即判断对错并展示答案解析。</p>
+          <p>本轮随机抽题只会抽取尚未答对的题目，直到题库全部答对。</p>
         </div>
-        <button class="primary" onclick="ExamApp.startRandomPractice()" ${questions.length ? "" : "disabled"}>随机抽一题</button>
+        <div class="actions">
+          <button class="primary" onclick="ExamApp.startRandomPractice()" ${questions.length && !stats.completed ? "" : "disabled"}>随机抽一题</button>
+          ${stats.completed ? `<button type="button" onclick="ExamApp.startNewPracticeRound()">开启新一轮</button>` : ""}
+        </div>
       </div>
+      ${renderPracticeProgress(stats)}
       <article class="card">
-        ${question ? renderAnswerCard(question, "practice", appState.practiceResult) : renderPracticeEmpty(questions.length)}
+        ${question ? renderAnswerCard(question, "practice", appState.practiceResult) : renderPracticeEmpty(questions.length, stats)}
       </article>
     </section>
   `;
 }
 
-function renderPracticeEmpty(questionCount) {
+function renderPracticeProgress(stats) {
+  if (!stats.total) return "";
+  const percent = Math.round((stats.correctCount / stats.total) * 100);
+  return `
+    <article class="practice-progress">
+      <div>
+        <strong>第 ${stats.round} 轮刷题进度</strong>
+        <p>已答对 ${stats.correctCount} / ${stats.total} 题，剩余 ${stats.remainingCount} 题。</p>
+      </div>
+      <div class="progress-meter" aria-label="随机刷题进度">
+        <span style="width: ${percent}%"></span>
+      </div>
+      <span class="badge ${stats.completed ? "success" : ""}">${stats.completed ? "本轮完成" : `${percent}%`}</span>
+    </article>
+  `;
+}
+
+function renderPracticeEmpty(questionCount, stats) {
   if (!questionCount) {
     return `<div class="empty">题库暂无题目，请先在题库管理中新增或导入。</div>`;
+  }
+  if (stats.completed) {
+    return `
+      <div class="empty">
+        <p>本轮题库题目已全部答对。</p>
+        <button class="primary" type="button" onclick="ExamApp.startNewPracticeRound()">开启新一轮刷题</button>
+      </div>
+    `;
   }
   return `<div class="empty">点击“随机抽一题”开始练习。</div>`;
 }
 
 function renderAnswerCard(question, scope, result) {
+  const practiceCompleted = scope === "practice" && result?.correct && getPracticeStats(getCurrentUser()).completed;
   return `
     <form class="answer-card" onsubmit="ExamApp.submitAnswer(event, '${scope}', '${question.id}')">
       <div class="question-meta">
@@ -564,7 +698,9 @@ function renderAnswerCard(question, scope, result) {
         <button class="primary" type="submit" ${result ? "disabled" : ""}>提交答案</button>
         ${
           scope === "practice"
-            ? `<button type="button" onclick="ExamApp.startRandomPractice()">下一题</button>`
+            ? practiceCompleted
+              ? `<button type="button" onclick="ExamApp.startNewPracticeRound()">开启新一轮</button>`
+              : `<button type="button" onclick="ExamApp.startRandomPractice()">下一题</button>`
             : `<button type="button" onclick="ExamApp.backToWrongList()">返回错题列表</button>`
         }
       </div>
@@ -1014,6 +1150,12 @@ const ExamApp = {
     if (!confirm("确认删除这道题吗？相关错题记录也会移除。")) return;
     saveQuestions(getQuestions().filter((question) => question.id !== id));
     saveWrongBook(getWrongBook().filter((item) => item.questionId !== id));
+    savePracticeProgress(
+      getPracticeProgress().map((item) => ({
+        ...item,
+        correctQuestionIds: (item.correctQuestionIds ?? []).filter((questionId) => questionId !== id),
+      })),
+    );
     if (appState.activePracticeQuestionId === id) appState.activePracticeQuestionId = null;
     if (appState.activeWrongQuestionId === id) appState.activeWrongQuestionId = null;
     if (appState.editingQuestionId === id) appState.editingQuestionId = null;
@@ -1126,13 +1268,32 @@ const ExamApp = {
   },
 
   startRandomPractice() {
+    const user = getCurrentUser();
     const questions = getQuestions();
-    if (!questions.length) return;
-    const question = questions[Math.floor(Math.random() * questions.length)];
+    if (!user || !questions.length) return;
+    const stats = getPracticeStats(user, questions);
+    if (stats.completed) {
+      appState.activePracticeQuestionId = null;
+      appState.practiceResult = null;
+      appState.view = "practice";
+      render();
+      return;
+    }
+    const pool = stats.remainingQuestions;
+    const question = pool[Math.floor(Math.random() * pool.length)];
     appState.activePracticeQuestionId = question.id;
     appState.practiceResult = null;
     appState.view = "practice";
     render();
+  },
+
+  startNewPracticeRound() {
+    const user = getCurrentUser();
+    if (!user) return;
+    resetPracticeProgress(user.id);
+    appState.activePracticeQuestionId = null;
+    appState.practiceResult = null;
+    this.startRandomPractice();
   },
 
   submitAnswer(event, scope, questionId) {
@@ -1143,12 +1304,22 @@ const ExamApp = {
     const userAnswer = collectAnswer(`${scope}_${questionId}`);
     const outcome = handleAnsweredQuestion(user, question, userAnswer, scope === "wrong" ? "wrong_book" : "practice");
     const remainingWrong = getWrongBook().find((item) => item.userId === user.id && item.questionId === question.id);
-    const message =
-      scope === "wrong" && outcome.correct
-        ? remainingWrong
-          ? `错题连续答对 ${remainingWrong.correctStreak}/2 次，再答对 ${2 - remainingWrong.correctStreak} 次会自动删除。`
-          : "该错题已连续答对 2 次，已自动从错题本删除。"
-        : "";
+    let message = "";
+    if (scope === "wrong" && outcome.correct) {
+      message = remainingWrong
+        ? `错题连续答对 ${remainingWrong.correctStreak}/2 次，再答对 ${2 - remainingWrong.correctStreak} 次会自动删除。`
+        : "该错题已连续答对 2 次，已自动从错题本删除。";
+    } else if (scope === "practice") {
+      if (outcome.correct) {
+        markPracticeQuestionCorrect(user.id, question.id);
+        const stats = getPracticeStats(user);
+        message = stats.completed
+          ? "本轮题库已全部答对，可开启新一轮刷题。"
+          : `本轮已答对 ${stats.correctCount}/${stats.total} 题，剩余 ${stats.remainingCount} 题不会重复抽取已答对题。`;
+      } else {
+        message = "本题未答对，不会计入本轮已答对题目，后续仍可能再次抽到。";
+      }
+    }
 
     const result = { ...outcome, userAnswer, message };
     if (scope === "wrong") appState.wrongResult = result;

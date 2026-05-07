@@ -338,6 +338,37 @@ label {
   gap: 14px;
 }
 
+.practice-progress {
+  display: grid;
+  grid-template-columns: minmax(180px, auto) minmax(160px, 1fr) auto;
+  gap: 16px;
+  align-items: center;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--card);
+  box-shadow: var(--shadow);
+}
+
+.practice-progress p {
+  margin: 6px 0 0;
+  color: var(--muted);
+}
+
+.progress-meter {
+  overflow: hidden;
+  height: 12px;
+  border-radius: 999px;
+  background: #edf2f8;
+}
+
+.progress-meter span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--primary), var(--success));
+}
+
 .question-item {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -535,6 +566,7 @@ th {
   .stats-grid,
   .two-columns,
   .form-grid,
+  .practice-progress,
   .result-summary {
     grid-template-columns: 1fr;
   }
